@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Liquidación Gastos</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,sans-serif;background:#f5f5f5}
+.login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#1a1917}
+.box{background:#fff;border-radius:16px;padding:2rem;width:90%;max-width:380px}
+h1{font-size:24px;margin-bottom:1rem}
+input{width:100%;padding:14px;border:1.5px solid #ddd;border-radius:8px;margin-bottom:1rem;font-size:16px}
+button{width:100%;padding:14px;background:#1a1917;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer}
+button:active{opacity:0.8}
+.err{background:#fee;color:#c00;padding:10px;border-radius:8px;margin-bottom:1rem;display:none}
+.err.show{display:block}
+.app{display:none;min-height:100vh;flex-direction:column}
+.app.visible{display:flex}
+.header{background:#1a1917;color:#fff;padding:1rem;display:flex;justify-content:space-between;align-items:center}
+.btn{background:#fff;color:#1a1917;padding:8px 16px;border-radius:6px;border:none;cursor:pointer}
+.body{padding:1.5rem;max-width:700px;margin:0 auto;width:100%}
+.trips{display:grid;gap:10px;margin-top:1rem}
+.trip{background:#fff;border:1px solid #ddd;border-radius:8px;padding:1rem;cursor:pointer}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:none;align-items:flex-end;z-index:100}
+.modal.open{display:flex}
+.drawer{background:#fff;border-radius:16px 16px 0 0;padding:1.5rem;width:100%;max-width:500px;margin:0 auto}
+select{width:100%;padding:12px;border:1.5px solid #ddd;border-radius:8px;margin-bottom:1rem;font-size:16px}
+.info{background:#e3f2fd;padding:12px;border-radius:8px;margin-bottom:1rem;font-size:14px}
+</style>
+</head>
+<body>
+
+<div class="login" id="login">
+  <div class="box">
+    <h1>Gastos de Viaje</h1>
+    <p style="color:#666;margin-bottom:1.5rem">Jandia Playa S.A.</p>
+    <div class="err" id="err">Usuario o contraseña incorrectos</div>
+    <input id="user" type="text" placeholder="Usuario" value="anxo">
+    <input id="pass" type="password" placeholder="Contraseña" value="11223344">
+    <button onclick="login()">Entrar</button>
+  </div>
+</div>
+
+<div class="app" id="app">
+  <div class="header">
+    <span>Gastos de Viaje</span>
+    <div>
+      <button class="btn" onclick="openSettings()">⚙️</button>
+      <button class="btn" onclick="logout()">Salir</button>
+    </div>
+  </div>
+  <div class="body">
+    <h2>Mis Viajes</h2>
+    <button class="btn" style="margin:1rem 0;background:#1a1917;color:#fff;width:auto;padding:10px 20px" onclick="alert('Demo: Crear nuevo viaje')">+ Nuevo</button>
+    <div id="root"></div>
+  </div>
+</div>
+
+<div class="modal" id="settings" onclick="closeSettings()">
+  <div class="drawer" onclick="event.stopPropagation()">
+    <h2 style="margin-bottom:1rem">Ajustes de IA</h2>
+    <select id="provider" onchange="updateProvider()">
+      <option value="tesseract">Tesseract.js (100% gratis)</option>
+      <option value="anthropic">Anthropic Claude</option>
+      <option value="google">Google Cloud Vision</option>
+      <option value="openai">OpenAI GPT-4o-mini</option>
+    </select>
+    <div id="provider-info"></div>
+    <div id="key-section" style="display:none">
+      <input id="api-key" type="password" placeholder="API Key">
+      <p id="key-hint" style="font-size:12px;color:#666;margin-bottom:1rem"></p>
+    </div>
+    <button onclick="saveSettings()">Guardar</button>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL='https://gphyysdzkjnwihaottop.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdwaHl5c2R6a2lud2loYW90dG9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2MTA4MDgsImV4cCI6MjA5MjE4NjgwOH0.9rZFAIHAhfIKPpeQwcm1jTpuJlXwaQ9uK9VFxkZ6f9Q';
+const CREDS={anxo:'11223344'};
+const PROVIDERS={
+  tesseract:{name:'Tesseract',info:'✅ 100% gratis, local',needsKey:false},
+  anthropic:{name:'Anthropic',info:'✅ Muy preciso, $5 gratis',needsKey:true,ph:'sk-ant-api03-...',hint:'console.anthropic.com'},
+  google:{name:'Google Vision',info:'✅ 1000/mes gratis',needsKey:true,ph:'AIzaSy...',hint:'console.cloud.google.com'},
+  openai:{name:'OpenAI',info:'✅ Barato, $5 gratis',needsKey:true,ph:'sk-proj-...',hint:'platform.openai.com'}
+};
+
+let db;
+try{db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY)}catch(e){console.error(e)}
+
+function login(){
+  const u=document.getElementById('user').value.trim().toLowerCase();
+  const p=document.getElementById('pass').value;
+  if(CREDS[u]===p){
+    sessionStorage.setItem('s','1');
+    document.getElementById('login').style.display='none';
+    document.getElementById('app').classList.add('visible');
+    loadData();
+  }else{
+    document.getElementById('err').classList.add('show');
+  }
+}
+
+function logout(){
+  sessionStorage.clear();
+  location.reload();
+}
+
+function openSettings(){
+  document.getElementById('provider').value=localStorage.getItem('provider')||'tesseract';
+  document.getElementById('api-key').value=localStorage.getItem('key')||'';
+  updateProvider();
+  document.getElementById('settings').classList.add('open');
+}
+
+function closeSettings(){
+  document.getElementById('settings').classList.remove('open');
+}
+
+function updateProvider(){
+  const p=document.getElementById('provider').value;
+  const info=PROVIDERS[p];
+  document.getElementById('provider-info').innerHTML='<div class="info">'+info.info+'</div>';
+  const ks=document.getElementById('key-section');
+  if(info.needsKey){
+    ks.style.display='block';
+    document.getElementById('api-key').placeholder=info.ph;
+    document.getElementById('key-hint').textContent=info.hint;
+  }else{
+    ks.style.display='none';
+  }
+}
+
+function saveSettings(){
+  localStorage.setItem('provider',document.getElementById('provider').value);
+  const k=document.getElementById('api-key').value.trim();
+  if(k)localStorage.setItem('key',k);
+  closeSettings();
+}
+
+async function loadData(){
+  try{
+    const {data}=await db.from('trips').select('*').order('created_at',{ascending:false});
+    const trips=data||[];
+    document.getElementById('root').innerHTML=trips.length?
+      '<div class="trips">'+trips.map(t=>'<div class="trip">'+t.name+'</div>').join('')+'</div>':
+      '<p style="color:#999;margin-top:2rem;text-align:center">No hay viajes. Crea el primero.</p>';
+  }catch(e){
+    console.error(e);
+    document.getElementById('root').innerHTML='<p style="color:#c00">Error al cargar datos</p>';
+  }
+}
+
+if(sessionStorage.getItem('s')==='1'){
+  document.getElementById('login').style.display='none';
+  document.getElementById('app').classList.add('visible');
+  loadData();
+}
+</script>
+</body>
+</html>
