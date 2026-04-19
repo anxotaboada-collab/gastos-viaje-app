@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Liquidación Gastos</title>
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,sans-serif;background:#f5f5f5;color:#1a1917}
+.loading{position:fixed;inset:0;background:#f5f5f5;display:flex;align-items:center;justify-content:center;z-index:999}
+.login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#1a1917}
+.box{background:#fff;border-radius:16px;padding:2rem;width:90%;max-width:380px}
+h1{font-size:24px;margin-bottom:1rem}
+input{width:100%;padding:14px;border:1.5px solid #ddd;border-radius:8px;margin-bottom:1rem;font-size:16px}
+button{width:100%;padding:14px;background:#1a1917;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer}
+.err{background:#fee;color:#c00;padding:10px;border-radius:8px;margin-bottom:1rem;display:none}
+.err.show{display:block}
+.app{display:none;min-height:100vh;flex-direction:column}
+.app.visible{display:flex}
+.header{background:#1a1917;color:#fff;padding:1rem;display:flex;justify-content:space-between}
+.hbtn{background:rgba(255,255,255,.12);color:#fff;padding:8px 16px;border-radius:6px;border:none;cursor:pointer;font-size:14px}
+.body{padding:1.5rem;max-width:700px;margin:0 auto;width:100%}
+.btn{background:#fff;color:#1a1917;padding:10px 18px;border-radius:8px;border:1.5px solid #ddd;cursor:pointer;font-size:14px}
+.btn-p{background:#1a1917;color:#fff}
+.trips{display:grid;gap:10px;margin-top:1rem}
+.trip{background:#fff;border:1px solid #ddd;border-radius:8px;padding:1rem;cursor:pointer}
+.form{background:#fff;border:1px solid #ddd;border-radius:8px;padding:1rem;margin-bottom:1rem}
+.empty{text-align:center;padding:4rem 1rem;color:#999}
+</style>
+</head>
+<body>
+
+<div class="loading" id="loading"><p>Cargando...</p></div>
+
+<div class="login" id="login" style="display:none">
+  <div class="box">
+    <h1>Gastos de Viaje</h1>
+    <p style="color:#666;margin-bottom:1.5rem">Jandia Playa S.A.</p>
+    <div class="err" id="err">Usuario o contraseña incorrectos</div>
+    <input id="user" type="text" placeholder="Usuario" value="anxo">
+    <input id="pass" type="password" placeholder="Contraseña" value="11223344">
+    <button onclick="doLogin()">Entrar</button>
+  </div>
+</div>
+
+<div class="app" id="app">
+  <div class="header">
+    <span>Gastos de Viaje</span>
+    <button class="hbtn" onclick="doLogout()">Salir</button>
+  </div>
+  <div class="body"><div id="root"></div></div>
+</div>
+
+<script>
+console.log('🚀 Iniciando app...');
+
+const SUPABASE_URL='https://gphyysdzkjnwihaottop.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdwaHl5c2R6a2lud2loYW90dG9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2MTA4MDgsImV4cCI6MjA5MjE4NjgwOH0.9rZFAIHAhfIKPpeQwcm1jTpuJlXwaQ9uK9VFxkZ6f9Q';
+const CREDS={anxo:'11223344'};
+
+let db;
+console.log('📦 Verificando Supabase...');
+if(typeof supabase==='undefined'){
+  console.error('❌ Supabase library no cargó');
+  alert('Error crítico: Supabase no se cargó. Verifica tu conexión a internet.');
+}else{
+  console.log('✅ Supabase library OK');
+  try{
+    db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+    console.log('✅ Cliente Supabase creado');
+  }catch(e){
+    console.error('❌ Error al crear cliente:',e);
+    alert('Error al inicializar Supabase: '+e.message);
+  }
+}
+
+const S={trips:[]};
+
+function doLogin(){
+  console.log('🔐 Intentando login...');
+  const u=document.getElementById('user').value.trim().toLowerCase();
+  const p=document.getElementById('pass').value;
+  if(CREDS[u]===p){
+    console.log('✅ Login correcto');
+    sessionStorage.setItem('s','1');
+    document.getElementById('login').style.display='none';
+    document.getElementById('app').classList.add('visible');
+    loadData();
+  }else{
+    console.log('❌ Credenciales incorrectas');
+    document.getElementById('err').classList.add('show');
+  }
+}
+
+function doLogout(){
+  sessionStorage.clear();
+  location.reload();
+}
+
+async function loadData(){
+  console.log('📊 Cargando datos...');
+  try{
+    console.log('Llamando a Supabase...');
+    const result=await db.from('trips').select('*');
+    console.log('Resultado:',result);
+    
+    if(result.error){
+      console.error('❌ Error de Supabase:',result.error);
+      throw new Error(result.error.message);
+    }
+    
+    S.trips=result.data||[];
+    console.log('✅ Viajes cargados:',S.trips.length);
+  }catch(e){
+    console.error('❌ Error al cargar:',e);
+    alert('Error al cargar datos: '+e.message);
+  }
+  
+  document.getElementById('loading').style.display='none';
+  document.getElementById('login').style.display='flex';
+  render();
+}
+
+function esc(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function render(){
+  if(!sessionStorage.getItem('s'))return;
+  
+  const form='<div class="form"><input id="tn" type="text" placeholder="Nombre del viaje *"><button class="btn btn-p" onclick="createTrip()">Crear Viaje</button></div>';
+  
+  let list='';
+  if(!S.trips.length){
+    list='<div class="empty"><p>No hay viajes creados</p></div>';
+  }else{
+    list='<div class="trips">'+S.trips.map(t=>
+      '<div class="trip"><div style="font-size:16px;font-weight:600">'+esc(t.name)+'</div></div>'
+    ).join('')+'</div>';
+  }
+  
+  document.getElementById('root').innerHTML='<h2 style="margin-bottom:1rem">Mis Viajes</h2>'+form+list;
+}
+
+async function createTrip(){
+  console.log('📝 Creando viaje...');
+  const v=document.getElementById('tn').value.trim();
+  if(!v){
+    alert('Escribe un nombre');
+    return;
+  }
+  
+  try{
+    console.log('Insertando:',{name:v});
+    const result=await db.from('trips').insert({name:v}).select('*');
+    console.log('Resultado insert:',result);
+    
+    if(result.error){
+      console.error('❌ Error:',result.error);
+      throw new Error(result.error.message);
+    }
+    
+    if(!result.data||!result.data.length){
+      throw new Error('No se recibieron datos');
+    }
+    
+    const newTrip=result.data[0];
+    console.log('✅ Viaje creado:',newTrip);
+    
+    S.trips.unshift(newTrip);
+    document.getElementById('tn').value='';
+    render();
+    alert('✅ Viaje "'+newTrip.name+'" creado');
+  }catch(e){
+    console.error('❌ Error al crear:',e);
+    alert('Error: '+e.message);
+  }
+}
+
+if(sessionStorage.getItem('s')==='1'){
+  console.log('✅ Sesión activa');
+  document.getElementById('loading').style.display='none';
+  document.getElementById('login').style.display='none';
+  document.getElementById('app').classList.add('visible');
+  loadData();
+}else{
+  console.log('❌ Sin sesión');
+  loadData();
+}
+
+console.log('✅ App lista');
+</script>
+</body>
+</html>
