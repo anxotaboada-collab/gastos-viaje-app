@@ -1,0 +1,9 @@
+{
+  "name": "gastos-viaje-app",
+  "version": "1.0.0",
+  "description": "Liquidación de gastos de viaje con IA - Jandia Playa S.A.",
+  "main": "index.html",
+  "scripts": {
+    "start": "serve ."
+  }
+}
