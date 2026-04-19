@@ -1,0 +1,12 @@
+{
+  "name": "liquidacion-gastos-viaje",
+  "version": "1.0.0",
+  "description": "App de liquidación de gastos de viaje con IA - Jandia Playa S.A.",
+  "scripts": {
+    "dev": "python3 -m http.server 3000",
+    "deploy": "vercel --prod"
+  },
+  "keywords": ["gastos", "viaje", "liquidacion", "jandia-playa"],
+  "author": "Anxo",
+  "license": "MIT"
+}
